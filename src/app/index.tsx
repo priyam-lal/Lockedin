@@ -1,45 +1,78 @@
 import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-type QuestProps = {
+type Quest = {
+  id: number;
   icon: string;
   title: string;
   description: string;
   xp: number;
   coins: number;
+  completed: boolean;
 };
 
-function QuestCard({
-  icon,
-  title,
-  description,
-  xp,
-  coins
-}: QuestProps) {
-  return (
-    <Pressable style={styles.questCard}>
-      <View style={styles.questIcon}>
-        <Text style={styles.questEmoji}>{icon}</Text>
-      </View>
-
-      <View style={styles.questContent}>
-        <Text style={styles.questTitle}>{title}</Text>
-        <Text style={styles.questDescription}>{description}</Text>
-        
-        <View style={styles.rewardRow}>
-          <Text style={styles.xpText}>⚡ +{xp} XP</Text>
-          <Text style={styles.coinText}>🪙 +{coins}</Text>
-        </View>
-      </View>
-
-      <View style={styles.checkbox}/>
-    </Pressable>
-
-  );
-}
+const initialQuests: Quest[] = [
+  {
+    id: 1,
+    icon: "💻",
+    title: "Deep Work",
+    description: "2 hours of focused work",
+    xp: 100,
+    coins: 20,
+    completed: false,
+  },
+  {
+    id: 2,
+    icon: "💪",
+    title: "Workout",
+    description: "Complete your workout",
+    xp: 50,
+    coins: 10,
+    completed: false,
+  },
+  {
+    id: 3,
+    icon: "🧠",
+    title: "Learning",
+    description: "Study for 30 minutes",
+    xp: 30,
+    coins: 5,
+    completed: false,
+  }
+];
 
 export default function HomeScreen() {
-  return(
+  const [xp, setXp] = useState(320);
+  const [coins, setCoins] = useState(250);
+  const [quests, setQuests] = useState(initialQuests);
+
+  const completedQuests = quests.filter(
+    (quest) => quest.completed
+  ).length;
+
+  const completeQuest = (questId: number) => {
+    const quest = quests.find((q) => q.id === questId);
+
+    if (!quest || quest.completed) {
+      return;
+    }
+
+    setXp((currentXp) => currentXp + quest.xp);
+    setCoins((currentCoins) => currentCoins + quest.coins);
+
+    setQuests((currentQuests) =>
+      currentQuests.map((q) =>
+        q.id === questId ? { ...q, completed: true } : q));
+
+  };
+
+  const xpNeededForNextLevel = 500;
+  const progressPercentage = Math.min((xp / xpNeededForNextLevel) * 100, 100);
+
+
+
+  return (
     <View style={styles.container}>
       <StatusBar style="light" />
 
@@ -63,7 +96,7 @@ export default function HomeScreen() {
         <View style={styles.xpCard}>
           <View style={styles.xpHeader}>
             <Text style={styles.xpLabel}>CURRENT EXPERIENCE</Text>
-            <Text style={styles.xpAmount}>320 / 500 XP</Text>
+            <Text style={styles.xpAmount}>{xp} / {xpNeededForNextLevel} XP</Text>
           </View>
 
           <View style={styles.progressBackground}>
@@ -71,7 +104,7 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.nextLevel}>
-            180 XP until Level 2 🚀
+            {Math.max(xpNeededForNextLevel - xp, 0)} XP until Level 2 🚀
           </Text>
         </View>
 
@@ -85,13 +118,13 @@ export default function HomeScreen() {
 
           <View style={styles.statCard}>
             <Text style={styles.statEmoji}>🪙</Text>
-            <Text style={styles.statNumber}>250</Text>
+            <Text style={styles.statNumber}>{coins}</Text>
             <Text style={styles.statLabel}>COINS</Text>
           </View>
 
           <View style={styles.statCard}>
             <Text style={styles.statEmoji}>⚔️</Text>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{completedQuests}</Text>
             <Text style={styles.statLabel}>QUESTS</Text>
           </View>
         </View>
@@ -99,32 +132,57 @@ export default function HomeScreen() {
         {/* Quests */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>TODAY'S QUESTS</Text>
-          <Text style={styles.questCount}>0 / 3</Text>
+          <Text style={styles.questCount}>{completedQuests} / {quests.length}</Text>
         </View>
 
-        <QuestCard
-          icon="💻"
-          title="Deep Work"
-          description="2 hours of focused work"
-          xp={100}
-          coins={20}
-        />
+        {quests.map((quest) => (
+          <Pressable
+            key={quest.id}
+            onPress={() => completeQuest(quest.id)}
+            style={[styles.questCard, quest.completed && styles.completedQuestCard]}
+          >
+            <View style={styles.questIcon}>
+              <Text style={styles.questEmoji}>
+                {quest.icon}
+              </Text>
+            </View>
+            <View style={styles.questContent}>
+              <Text
+                style={[
+                  styles.questTitle,
+                  quest.completed && styles.completedText,
+                ]}
+              >
+                {quest.title}
+              </Text>
 
-        <QuestCard
-          icon="💪"
-          title="Workout"
-          description="Complete your workout"
-          xp={50}
-          coins={10}
-        />
+              <Text style={styles.questDescription}>
+                {quest.description}
+              </Text>
 
-        <QuestCard
-          icon="🧠"
-          title="Learning"
-          description="Study for 30 minutes"
-          xp={30}
-          coins={5}
-        />
+              <View style={styles.rewardRow}>
+                <Text style={styles.xpText}>
+                  ⚡ +{quest.xp} XP
+                </Text>
+
+                <Text style={styles.coinText}>
+                  🪙 +{quest.coins}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.checkbox,
+                quest.completed && styles.completedCheckbox,
+              ]}
+            >
+              {quest.completed && (
+                <Text style={styles.checkmark}>✓</Text>
+              )}
+            </View>
+          </Pressable>
+        ))}
       </ScrollView>
     </View>
 
@@ -212,7 +270,6 @@ const styles = StyleSheet.create({
 
   progressFill: {
     height: "100%",
-    width: "64%",
     backgroundColor: "#8B5CF6",
     borderRadius: 10,
   },
@@ -282,6 +339,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  completedQuestCard: {
+    opacity: 0.55,
+  },
+
   questIcon: {
     width: 50,
     height: 50,
@@ -304,6 +365,10 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
+  },
+
+  completedText: {
+    textDecorationLine: "line-through",
   },
 
   questDescription: {
@@ -337,6 +402,19 @@ const styles = StyleSheet.create({
     borderColor: "#6B7280",
     borderRadius: 12,
     marginLeft: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  completedCheckbox: {
+    backgroundColor: "#22C55E",
+    borderColor: "#22C55E",
+  },
+
+  checkmark: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 14,
   }
 });
 
