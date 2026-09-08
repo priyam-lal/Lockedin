@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type Quest = {
   id: number;
@@ -17,6 +17,7 @@ type User = {
   xp: number;
   coins: number;
   quests: Quest[];
+  level: number;
 }
 
 const STORAGE_KEY = "@lockedin_game_state";
@@ -27,7 +28,7 @@ const initialQuests: Quest[] = [
     icon: "💻",
     title: "Deep Work",
     description: "2 hours of focused work",
-    xp: 200,
+    xp: 150,
     coins: 20,
     completed: false,
   },
@@ -36,7 +37,7 @@ const initialQuests: Quest[] = [
     icon: "💪",
     title: "Workout",
     description: "Complete your workout",
-    xp: 50,
+    xp: 80,
     coins: 10,
     completed: false,
   },
@@ -45,16 +46,20 @@ const initialQuests: Quest[] = [
     icon: "🧠",
     title: "Learning",
     description: "Study for 30 minutes",
-    xp: 30,
+    xp: 390,
     coins: 5,
     completed: false,
   }
 ];
 
 export default function HomeScreen() {
-  const [xp, setXp] = useState(320);
-  const [coins, setCoins] = useState(250);
+  const [xp, setXp] = useState(0);
+  const [coins, setCoins] = useState(0);
   const [quests, setQuests] = useState(initialQuests);
+  const [level, setLevel] = useState(1);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [bonusCoins, setBonusCoins] = useState(0);
+  const [levelReached, setLevelReached] = useState(1);
 
   const storeData = async (value: User) => {
     try {
@@ -75,22 +80,17 @@ export default function HomeScreen() {
       setXp(parsedData.xp);
       setCoins(parsedData.coins);
       setQuests(parsedData.quests);
+      setLevel(parsedData.level ?? 1);
     } catch (e) {
       console.log("Updating Error");
     }
   };
 
-
-  useEffect(() => {
-    const refreshState = async () => {
-      await updateState();
-    }
-    refreshState();
-  }, []);
-
   const completedQuests = quests.filter(
     (quest) => quest.completed
   ).length;
+
+  const getXpRequired = (level: number) => level * 100;
 
   const completeQuest = async (questId: number) => {
     const quest = quests.find((q) => q.id === questId);
@@ -99,29 +99,79 @@ export default function HomeScreen() {
       return;
     }
 
-    const newXP = xp + quest.xp;
-    const newCoins = coins + quest.coins;
+    let newXp = xp + quest.xp;
+    let newCoins = coins + quest.coins;
     const newQuests = quests.map((q) => q.id === questId ? { ...q, completed: true } : q);
+    let newLevel = level;
+    while (newXp >= getXpRequired(newLevel)) {
+      newXp -= getXpRequired(newLevel);
+      newLevel++;
+    }
+    if (newLevel > level) {
+      const bonus = (newLevel - level) * 50;
+      setBonusCoins(bonus);
+      setLevelReached(newLevel);
+      setShowLevelUp(true);
+      newCoins += bonus;
+    }
 
-    setXp(newXP);
+    setXp(newXp);
     setCoins(newCoins);
     setQuests(newQuests);
+    setLevel(newLevel);
 
     await storeData({
-      xp: newXP,
+      xp: newXp,
       coins: newCoins,
-      quests: newQuests
+      quests: newQuests,
+      level: newLevel
     });
   };
 
-  const xpNeededForNextLevel = 500;
+  const xpNeededForNextLevel = getXpRequired(level);
   const progressPercentage = Math.min((xp / xpNeededForNextLevel) * 100, 100);
 
-
+  useEffect(() => {
+    const refreshState = async () => {
+      await updateState();
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+    refreshState();
+  }, []);
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
+      <Modal
+        visible={showLevelUp}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.levelUpModal}>
+
+            {/* Celebration icon */}
+            <Text style={styles.levelUpEmoji}>🎉</Text>
+
+            {/* Level-up heading */}
+            <Text style={styles.levelUpTitle}>LEVEL UP!</Text>
+
+            {/* Display levelReached */}
+            <Text style={styles.levelReachedText}>LEVEL {levelReached}</Text>
+
+            {/* Display bonus reward */}
+            <Text style={styles.bonusText}>+{bonusCoins} 🪙</Text>
+
+            <Pressable
+              style={styles.modalButton}
+              onPress={() => setShowLevelUp(false)}
+            >
+              <Text style={styles.modalButtonText}>AWESOME!</Text>
+            </Pressable>
+
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -135,7 +185,7 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.levelBadge}>
-            <Text style={styles.levelText}>LVL 1</Text>
+            <Text style={styles.levelText}>{level}</Text>
           </View>
         </View>
 
@@ -152,7 +202,7 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.nextLevel}>
-            {Math.max(xpNeededForNextLevel - xp, 0)} XP until Level 2 🚀
+            {Math.max(xpNeededForNextLevel - xp, 0)} XP until Level {level + 1} 🚀
           </Text>
         </View>
 
@@ -463,6 +513,61 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "900",
     fontSize: 14,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+
+  levelUpModal: {
+    width: "100%",
+    backgroundColor: "#1F2937",
+    borderRadius: 24,
+    padding: 32,
+    alignItems: "center",
+  },
+
+  levelUpEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+
+  levelUpTitle: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "900",
+    marginBottom: 12,
+  },
+
+  levelReachedText: {
+    color: "#A78BFA",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  bonusText: {
+    color: "#FBBF24",
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 12,
+  },
+
+  modalButton: {
+    backgroundColor: "#8B5CF6",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 14,
+    marginTop: 28,
+  },
+
+  modalButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   }
 });
 
