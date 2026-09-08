@@ -1,5 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 type Quest = {
@@ -12,13 +13,21 @@ type Quest = {
   completed: boolean;
 };
 
+type User = {
+  xp: number;
+  coins: number;
+  quests: Quest[];
+}
+
+const STORAGE_KEY = "@lockedin_game_state";
+
 const initialQuests: Quest[] = [
   {
     id: 1,
     icon: "💻",
     title: "Deep Work",
     description: "2 hours of focused work",
-    xp: 100,
+    xp: 200,
     coins: 20,
     completed: false,
   },
@@ -47,24 +56,62 @@ export default function HomeScreen() {
   const [coins, setCoins] = useState(250);
   const [quests, setQuests] = useState(initialQuests);
 
+  const storeData = async (value: User) => {
+    try {
+      const jsonValue = JSON.stringify(value);
+      await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+    } catch (e) {
+      console.log("Saving Error");
+    }
+  };
+
+  const updateState = async () => {
+    try {
+      const savedData = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!savedData) {
+        return;
+      }
+      const parsedData = JSON.parse(savedData);
+      setXp(parsedData.xp);
+      setCoins(parsedData.coins);
+      setQuests(parsedData.quests);
+    } catch (e) {
+      console.log("Updating Error");
+    }
+  };
+
+
+  useEffect(() => {
+    const refreshState = async () => {
+      await updateState();
+    }
+    refreshState();
+  }, []);
+
   const completedQuests = quests.filter(
     (quest) => quest.completed
   ).length;
 
-  const completeQuest = (questId: number) => {
+  const completeQuest = async (questId: number) => {
     const quest = quests.find((q) => q.id === questId);
 
     if (!quest || quest.completed) {
       return;
     }
 
-    setXp((currentXp) => currentXp + quest.xp);
-    setCoins((currentCoins) => currentCoins + quest.coins);
+    const newXP = xp + quest.xp;
+    const newCoins = coins + quest.coins;
+    const newQuests = quests.map((q) => q.id === questId ? { ...q, completed: true } : q);
 
-    setQuests((currentQuests) =>
-      currentQuests.map((q) =>
-        q.id === questId ? { ...q, completed: true } : q));
+    setXp(newXP);
+    setCoins(newCoins);
+    setQuests(newQuests);
 
+    await storeData({
+      xp: newXP,
+      coins: newCoins,
+      quests: newQuests
+    });
   };
 
   const xpNeededForNextLevel = 500;
@@ -100,7 +147,8 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.progressBackground}>
-            <View style={styles.progressFill} />
+            <View
+              style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
           </View>
 
           <Text style={styles.nextLevel}>
